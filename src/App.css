@@ -1,0 +1,59 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+
+.App {
+  text-align: center;
+  padding: 50px;
+}
+
+.row {
+  display: flex;
+  flex: 1;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  border: 1px solid black;
+}
+
+.box {
+  height: 400px;
+  display: flex;
+  font-size: 3em;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid black;
+}
+
+.score-container {
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.score {
+  font-size: 15em;
+  
+}
+
+.score-control {
+  font-size: 2em;
+  width: 50px;
+  height: 50px;
+  border-radius: 25px;
+  cursor: pointer;
+}
+
+.button {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 5px;
+  background-color: yellowgreen;
+}
