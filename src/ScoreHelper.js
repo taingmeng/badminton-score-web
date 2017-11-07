@@ -16,6 +16,7 @@ const numberMap = {
   '4': 4,
   'four': 4,
   'for': 4,
+  'fall': 4,
   '5': 5,
   'five': 5,
   '6': 6,
@@ -50,9 +51,9 @@ const numberMap = {
   'tweenty': 20,
 }
 
-export function getNumber (word) {
+export function getNumber(word) {
   const number = numberMap[word]
-  if (number === null) {
+  if (number === null || number === undefined) {
     return -1
   }
   return number
