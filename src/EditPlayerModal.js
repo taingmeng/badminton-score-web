@@ -50,7 +50,6 @@ class EditPlayerModal extends React.Component {
     return (
       <Modal
         style={customStyles}
-        onRequestClose={this.closeModal}
         isOpen={this.props.isOpen}>
         <div className="edit-player-modal">
           <div>Player Name</div>

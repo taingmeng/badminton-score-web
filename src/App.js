@@ -3,6 +3,7 @@ import annyang from 'annyang'
 import Speech from 'speak-tts'
 
 import EditPlayerModal from './EditPlayerModal'
+import HelpModal from './HelpModal'
 import { getNumber } from './ScoreHelper'
 import undo from './svg/undo-button.svg'
 import help from './svg/help-button.svg'
@@ -21,6 +22,7 @@ const intialState = {
   voiceEngine: '',
   voiceSupported: false,
   speakOn: true,
+  speakSupported: Speech.browserSupport(),
   listenOn: true,
   gameMode: 'single',
   leftFirst: true,
@@ -37,6 +39,7 @@ const intialState = {
       commands: ['Player Two', 'Champion']
     }
   ],
+  isOpenHelp: false,
   isOpenEditPlayer: false,
   activePlayerIndex: -1
 }
@@ -44,8 +47,20 @@ const intialState = {
 class App extends Component {
   constructor(params) {
     super(params)
-    this.state = intialState
+    this.state = this.getDataFromLocalStorage()
     this.speakCount = 0
+  }
+
+  saveDataToLocalStorage() {
+    localStorage.setItem('badminton', JSON.stringify(this.state))
+  }
+
+  getDataFromLocalStorage() {
+    const fromLocalStorage = localStorage.getItem('badminton')
+    if (fromLocalStorage) {
+      return JSON.parse(fromLocalStorage)
+    }
+    return intialState
   }
 
   componentDidMount() {
@@ -168,12 +183,15 @@ class App extends Component {
     if (scoreOffset > 0) {
       this.setState({
         lastScorers: [...this.state.lastScorers, playerIndex]
-      }, () => this.announceServingSide())
+      }, () => {
+        this.announceServingSide()
+        this.saveDataToLocalStorage()
+      })
 
     } else {
       this.setState({
         lastScorers: this.state.lastScorers.slice(0, -1)
-      })
+      }, () => this.saveDataToLocalStorage())
     }
   }
 
@@ -203,27 +221,54 @@ class App extends Component {
     this.setState({
       players: players,
       lastScorer: 0
-    })
+    }, () => this.saveDataToLocalStorage())
   }
 
   changeSide() {
     this.setState({
       leftFirst: !this.state.leftFirst,
       players: this.state.players.reverse()
-    })
+    }, () => this.saveDataToLocalStorage())
   }
 
   announceServingSide() {
+    const annoucements = []
+
+    // const winnerIndex = this.getWinnerIndex()
+    // if (winnerIndex !== -1) {
+    //   //Announce winner
+    //   annoucements.push(`${this.state.players[winnerIndex].name} is the winner`)
+    // } else {
+    //Announce deuce
+    if (this.isDeuce()) {
+      annoucements.push('Deuce')
+    }
+
+    //Announce scores
+    annoucements.push(this.getScoresOrderByLastScorer())
+
+    //Announce serving side
     const index = this.getLastScorerIndex()
     const serveSide = this.state.players[index].score % 2 === 0 ? 'right' : 'left'
-    this.speak(`${this.getScoresOrderByLastScorer()}, ${this.state.players[index].name} serves on the ${serveSide}}`)
+    annoucements.push(`${this.state.players[index].name} serves on the ${serveSide}`)
+    // }
+
+    this.speak(annoucements.join(', '))
   }
+
+  isDeuce() {
+    return this.state.players[0].score === this.state.players[1].score && this.state.players[0].score >= 10
+  }
+
+  // getWinnerIndex() {
+  //   const scores = this.state.players.map(player => player.score)
+  //   const isDeucing = scores.every(score => score >= 10)
+  //   this.state.players.findIndex(player => isDeucing ? player.score > 10)
+  // }
 
   speak(message) {
     if (this.state.speakOn) {
       if (annyang && this.state.listenOn) {
-        console.log('speak', new Date())
-        console.log('speak', 'abort')
         annyang.abort()
       }
       this.speakCount += 1
@@ -287,8 +332,14 @@ class App extends Component {
     players[this.state.activePlayerIndex].commands = updatedPlayer.commands
     this.setState({
       players: players,
-    })
+    }, () => this.saveDataToLocalStorage())
     this.closeEditPlayerModal()
+  }
+
+  help() {
+    this.setState({
+      isOpenHelp: true
+    })
   }
 
   render() {
@@ -311,20 +362,32 @@ class App extends Component {
         src={this.state.listenOn ? listenOn : listenOff}
         onClick={() => this.toggleListen()} /> : null
 
+    const speakButton = this.state.speakSupported ?
+      <img
+        className="button"
+        alt=""
+        src={this.state.speakOn ? speakOn : speakOff}
+        onClick={() => this.setState({ speakOn: !this.state.speakOn })} /> : null
+
     return (
       <div className="app">
-        {this.state.activePlayerIndex !== -1 ?
+        {this.state.isOpenEditPlayer ?
           <EditPlayerModal
             onCancel={() => this.closeEditPlayerModal()}
             onConfirm={(updatedPlayer) => this.updatePlayer(updatedPlayer)}
             isOpen={this.state.isOpenEditPlayer}
-            index={this.state.activePlayerIndex}
             player={this.state.players[this.state.activePlayerIndex]} /> : null}
+
+        {this.state.isOpenHelp ?
+          <HelpModal
+            onCancel={() => this.setState({ isOpenHelp: false })}
+            isOpen={this.state.isOpenHelp} /> : null}
+
         <div className="menu">
           <div className="menu-title">Badminton Score Keeper</div>
           <div className="button-container">
             {listenButton}
-            <img className="button" alt="" src={this.state.speakOn ? speakOn : speakOff} onClick={() => this.setState({ speakOn: !this.state.speakOn })} />
+            {speakButton}
             <img className="button" alt="" src={undo} onClick={() => this.undo()} />
             <img className="button" alt="" src={change} onClick={() => this.changeSide()} />
             <img className="button" alt="" src={reset} onClick={() => this.reset()} />
