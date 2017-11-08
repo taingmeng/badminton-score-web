@@ -1,0 +1,41 @@
+.edit-player-modal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.edit-player-modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.edit-player-modal-button {
+  margin-left: 5px;
+}
+
+.commands-container {
+  flex: 1;
+  overflow-x: hidden;
+  padding: 10px;
+  background: lightgray;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.command {
+  border-radius: 5px;
+  border: 1px solid black;
+  padding: 5px;
+  font-size: 1em;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+}
+
+.command-button {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}

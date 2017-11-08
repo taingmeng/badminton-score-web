@@ -7,6 +7,7 @@
     "annyang": "^2.6.0",
     "react": "^16.0.0",
     "react-dom": "^16.0.0",
+    "react-modal": "^3.1.2",
     "react-scripts": "1.0.17",
     "speak-tts": "^1.0.2"
   },

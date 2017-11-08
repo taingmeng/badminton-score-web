@@ -2,6 +2,7 @@ import React, { Component } from 'react'
 import annyang from 'annyang'
 import Speech from 'speak-tts'
 
+import EditPlayerModal from './EditPlayerModal'
 import { getNumber } from './ScoreHelper'
 import undo from './svg/undo-button.svg'
 import help from './svg/help-button.svg'
@@ -36,6 +37,8 @@ const intialState = {
       commands: ['Player Two', 'Champion']
     }
   ],
+  isOpenEditPlayer: false,
+  activePlayerIndex: -1
 }
 
 class App extends Component {
@@ -132,11 +135,9 @@ class App extends Component {
         const score0 = getNumber(scores[0])
         const score1 = getNumber(scores[1])
         if (score0 !== -1 && score1 === -2) {
-          console.log("result", "all")
           this.handleScoresFromVoiceRecognition([score0, score0])
           return true
         } else if (score0 !== -1 && score1 !== -1) {
-          console.log("result", "normal " + score0 + ' ' + score1)
           this.handleScoresFromVoiceRecognition([score0, score1])
           return true
         }
@@ -266,6 +267,30 @@ class App extends Component {
     return this.state.players[playerIndex].score % 2 === 0
   }
 
+  openEditPlayerModal(playerIndex) {
+    this.setState({
+      isOpenEditPlayer: true,
+      activePlayerIndex: playerIndex
+    })
+  }
+
+  closeEditPlayerModal() {
+    this.setState({
+      isOpenEditPlayer: false,
+      activePlayerIndex: -1
+    })
+  }
+
+  updatePlayer(updatedPlayer) {
+    const players = this.state.players.slice()
+    players[this.state.activePlayerIndex].name = updatedPlayer.name
+    players[this.state.activePlayerIndex].commands = updatedPlayer.commands
+    this.setState({
+      players: players,
+    })
+    this.closeEditPlayerModal()
+  }
+
   render() {
     const playerNames = this.state.players.map(player => player.name)
     const leftPositions = this.hasEvenScore(this.getLastScorerIndex()) ? [] : playerNames
@@ -288,6 +313,13 @@ class App extends Component {
 
     return (
       <div className="app">
+        {this.state.activePlayerIndex !== -1 ?
+          <EditPlayerModal
+            onCancel={() => this.closeEditPlayerModal()}
+            onConfirm={(updatedPlayer) => this.updatePlayer(updatedPlayer)}
+            isOpen={this.state.isOpenEditPlayer}
+            index={this.state.activePlayerIndex}
+            player={this.state.players[this.state.activePlayerIndex]} /> : null}
         <div className="menu">
           <div className="menu-title">Badminton Score Keeper</div>
           <div className="button-container">
@@ -302,15 +334,15 @@ class App extends Component {
         <div className="container">
           <div className="row">
             <div className="col">
-              <div className="box">{leftPositions[0]}</div>
-              <div className="box">{rightPositions[0]}</div>
+              <div className="box" onClick={() => { if (leftPositions[0]) this.openEditPlayerModal(0) }}>{leftPositions[0]}</div>
+              <div className="box" onClick={() => { if (rightPositions[0]) this.openEditPlayerModal(0) }}>{rightPositions[0]}</div>
             </div>
             <div className="row">
               {scores}
             </div>
             <div className="col">
-              <div className="box">{rightPositions[1]}</div>
-              <div className="box">{leftPositions[1]}</div>
+              <div className="box" onClick={() => { if (rightPositions[1]) this.openEditPlayerModal(1) }}>{rightPositions[1]}</div>
+              <div className="box" onClick={() => { if (leftPositions[1]) this.openEditPlayerModal(1) }}>{leftPositions[1]}</div>
             </div>
           </div>
           <div className="info-container">

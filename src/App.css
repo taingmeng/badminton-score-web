@@ -5,6 +5,23 @@ body {
   overflow-x: hidden;
 }
 
+button {
+  outline: none;
+  border-radius: 5px;
+  border: 1px solid black;
+  padding: 5px;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+input {
+  outline: none;
+  border-radius: 5px;
+  border: 1px solid black;
+  padding: 5px;
+  font-size: 1em;
+}
+
 .app {
   text-align: center;
 }
@@ -49,6 +66,7 @@ body {
   align-items: center;
   justify-content: center;
   border: 1px solid black;
+  cursor: pointer;
 }
 
 .score-container {
