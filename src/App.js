@@ -111,20 +111,18 @@ class App extends Component {
 
   errorCallback = (event) => {
     this.setState({
-      voiceError: event.error,
       voiceInput: []
     })
   }
 
   resultCallback = (event) => {
     this.setState({
-      voiceError: '',
       voiceInput: event
     })
     event.some((phrase, index) => {
       this.state.players.some((player, index) => {
         if (player.commands.map(command => command.toLocaleLowerCase()).includes(phrase.toLowerCase())) {
-          this.increaseSpecificPlayerScore(index)
+          this.increaseScore(index)
           return true
         }
         return false
@@ -135,11 +133,11 @@ class App extends Component {
         const score1 = getNumber(scores[1])
         if (score0 !== -1 && score1 === -2) {
           console.log("result", "all")
-          this.updatePlayerScore([score0, score0])
+          this.handleScoresFromVoiceRecognition([score0, score0])
           return true
         } else if (score0 !== -1 && score1 !== -1) {
           console.log("result", "normal " + score0 + ' ' + score1)
-          this.updatePlayerScore([score0, score1])
+          this.handleScoresFromVoiceRecognition([score0, score1])
           return true
         }
       }
@@ -147,12 +145,12 @@ class App extends Component {
     })
   }
 
-  onScoreIncrease(index) {
-    this.updateScore(index, 1)
+  increaseScore(playerIndex) {
+    this.updateScore(playerIndex, 1)
   }
 
-  onScoreDecrease(index) {
-    this.updateScore(index, -1)
+  decreaseScore(playerIndex) {
+    this.updateScore(playerIndex, -1)
   }
 
   updateScore(playerIndex, scoreOffset) {
@@ -178,33 +176,23 @@ class App extends Component {
     }
   }
 
-  increaseSpecificPlayerScore(playerIndex) {
-    this.onScoreIncrease(playerIndex)
+  handleScoresFromVoiceRecognition(scores) {
+    const newScorerIndex = this.getNewScorerIndex()
+    if (newScorerIndex === -1) {
+      this.setState({
+        voiceEngine: 'Invalid score update'
+      })
+      this.speak('Invalid score update for ' + scores)
+    } else {
+      this.increaseScore(newScorerIndex)
+    }
   }
 
   undo() {
     const lastScorers = this.state.lastScorers
     if (lastScorers.length > 0) {
       const lastScorer = lastScorers[lastScorers.length - 1]
-      this.onScoreDecrease(lastScorer)
-    }
-  }
-
-  updatePlayerScore(scores) {
-    const currentScores = this.state.players.map(player => player.score)
-    if (scores[0] - currentScores[0] === 1 && scores[1] === currentScores[1]) {
-      this.onScoreIncrease(0)
-    } else if (scores[1] - currentScores[1] === 1 && scores[0] === currentScores[0]) {
-      this.onScoreIncrease(1)
-    } else if (scores[0] - currentScores[1] === 1 && scores[1] === currentScores[0]) {
-      this.onScoreIncrease(1)
-    } else if (scores[1] - currentScores[0] === 1 && scores[0] === currentScores[1]) {
-      this.onScoreIncrease(0)
-    } else {
-      this.setState({
-        voiceError: 'Invalid score update for ' + scores
-      })
-      this.speak('Invalid score update for ' + scores)
+      this.decreaseScore(lastScorer)
     }
   }
 
@@ -253,6 +241,15 @@ class App extends Component {
     }
   }
 
+  getNewScorerIndex(newScores) {
+    const currentScores = this.state.players.map(player => player.score)
+    let newScorerIndex = newScores.findIndex((newScore, index) => newScore - currentScores[index] == 1)
+    if (newScorerIndex === -1) {
+      newScorerIndex = newScores.reverse().findIndex((newScore, index) => newScore - currentScores[index] == 1)
+    }
+    return newScorerIndex
+  }
+
   getLastScorerIndex() {
     if (this.state.lastScorers.length === 0) {
       return 0
@@ -276,9 +273,9 @@ class App extends Component {
 
     const scores = this.state.players.map((player, index) => (
       <div className="score-container" key={index}>
-        <img src={plus} className="score-control" onClick={() => this.onScoreIncrease(index)} alt="" />
+        <img src={plus} className="score-control" onClick={() => this.increaseScore(index)} alt="" />
         <div className="score">{player.score}</div>
-        <img src={minus} className="score-control" onClick={() => this.onScoreDecrease(index)} alt="" />
+        <img src={minus} className="score-control" onClick={() => this.decreaseScore(index)} alt="" />
       </div>
     ))
 
@@ -320,11 +317,13 @@ class App extends Component {
             <div>
               <span>Voice Engine Status: </span><span style={{ fontWeight: 'bold' }}>{this.state.voiceEngine.toUpperCase()}</span>
             </div>
-            <div className="info-voice-input">
-              Voice input:
-              {this.state.voiceInput.map((input, index) => <li key={index}>{input}</li>)}
+            {this.state.voiceInput.length > 0 ?
+              <div className="info-voice-input">
+                Voice input:
+                {this.state.voiceInput.map((input, index) => <li key={index}>{input}</li>)}
+              </div> : null
+            }
 
-            </div>
           </div>
         </div>
       </div>
