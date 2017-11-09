@@ -41,7 +41,8 @@ const intialState = {
   ],
   isOpenHelp: false,
   isOpenEditPlayer: false,
-  activePlayerIndex: -1
+  activePlayerIndex: -1,
+  winningPoint: 11,
 }
 
 class App extends Component {
@@ -49,6 +50,7 @@ class App extends Component {
     super(params)
     this.state = this.getDataFromLocalStorage()
     this.speakCount = 0
+    this.speakCountQueue = []
   }
 
   saveDataToLocalStorage() {
@@ -175,6 +177,10 @@ class App extends Component {
       return
     }
 
+    if (this.getWinnerIndex() !== -1 && scoreOffset > 0) {
+      return
+    }
+
     players[playerIndex].score += scoreOffset
     this.setState({
       players: players
@@ -187,8 +193,7 @@ class App extends Component {
         this.announceServingSide()
         this.saveDataToLocalStorage()
       })
-
-    } else {
+    } else if (scoreOffset < 0) {
       this.setState({
         lastScorers: this.state.lastScorers.slice(0, -1)
       }, () => this.saveDataToLocalStorage())
@@ -196,7 +201,7 @@ class App extends Component {
   }
 
   handleScoresFromVoiceRecognition(scores) {
-    const newScorerIndex = this.getNewScorerIndex()
+    const newScorerIndex = this.getNewScorerIndex(scores)
     if (newScorerIndex === -1) {
       this.setState({
         voiceEngine: 'Invalid score update'
@@ -234,37 +239,44 @@ class App extends Component {
   announceServingSide() {
     const annoucements = []
 
-    // const winnerIndex = this.getWinnerIndex()
-    // if (winnerIndex !== -1) {
-    //   //Announce winner
-    //   annoucements.push(`${this.state.players[winnerIndex].name} is the winner`)
-    // } else {
-    //Announce deuce
-    if (this.isDeuce()) {
-      annoucements.push('Deuce')
+    const winnerIndex = this.getWinnerIndex()
+    if (winnerIndex !== -1) {
+      //Announce winner
+      annoucements.push(`Good game! Winner is ${this.state.players[winnerIndex].name}`)
+    } else {
+      //Announce deuce
+      if (this.isDeuce()) {
+        annoucements.push('Deuce')
+      }
+
+      //Announce scores
+      annoucements.push(this.getScoresOrderByLastScorer())
+
+      //Announce serving side
+      const index = this.getLastScorerIndex()
+      const serveSide = this.state.players[index].score % 2 === 0 ? 'right' : 'left'
+      annoucements.push(`${this.state.players[index].name} serves on the ${serveSide}`)
     }
-
-    //Announce scores
-    annoucements.push(this.getScoresOrderByLastScorer())
-
-    //Announce serving side
-    const index = this.getLastScorerIndex()
-    const serveSide = this.state.players[index].score % 2 === 0 ? 'right' : 'left'
-    annoucements.push(`${this.state.players[index].name} serves on the ${serveSide}`)
-    // }
 
     this.speak(annoucements.join(', '))
   }
 
   isDeuce() {
-    return this.state.players[0].score === this.state.players[1].score && this.state.players[0].score >= 10
+    const gamePoint = this.state.winningPoint - 1
+    return this.state.players[0].score === this.state.players[1].score && this.state.players[0].score >= gamePoint
   }
 
-  // getWinnerIndex() {
-  //   const scores = this.state.players.map(player => player.score)
-  //   const isDeucing = scores.every(score => score >= 10)
-  //   this.state.players.findIndex(player => isDeucing ? player.score > 10)
-  // }
+  getWinnerIndex() {
+    const gamePoint = this.state.winningPoint - 1
+    const scores = this.state.players.map(player => player.score)
+    const isDeucing = scores.every(score => score >= gamePoint)
+    if (isDeucing) {
+      const sum = scores.reduce((sum, score) => sum + score, 0)
+      return this.state.players.findIndex(player => player.score - 1 >= sum / 2)
+    } else {
+      return this.state.players.findIndex(player => player.score > gamePoint)
+    }
+  }
 
   speak(message) {
     if (this.state.speakOn) {
@@ -272,14 +284,13 @@ class App extends Component {
         annyang.abort()
       }
       this.speakCount += 1
+      this.speakCountQueue.push(this.speakCount)
       Speech.speak({
         text: message,
-        onError: () => {
-          this.speakCount -= 1
-        },
         onEnd: () => {
           this.speakCount -= 1
-          if (annyang && this.state.listenOn && this.speakCount === 0) {
+          this.speakCountQueue.pop()
+          if (annyang && this.state.listenOn) {
             annyang.resume()
           }
         }
@@ -342,6 +353,12 @@ class App extends Component {
     })
   }
 
+  toggleWinningPoint() {
+    this.setState({
+      winningPoint: this.state.winningPoint === 11 ? 21 : 11
+    })
+  }
+
   render() {
     const playerNames = this.state.players.map(player => player.name)
     const leftPositions = this.hasEvenScore(this.getLastScorerIndex()) ? [] : playerNames
@@ -349,9 +366,9 @@ class App extends Component {
 
     const scores = this.state.players.map((player, index) => (
       <div className="score-container" key={index}>
-        <img src={plus} className="score-control" onClick={() => this.increaseScore(index)} alt="" />
+        <img src={plus} className="score-control" onClick={() => this.increaseScore(index)} alt="" style={{ opacity: `${this.getWinnerIndex() !== -1 ? 0.2 : 1}` }} />
         <div className="score">{player.score}</div>
-        <img src={minus} className="score-control" onClick={() => this.decreaseScore(index)} alt="" />
+        <img src={minus} className="score-control" onClick={() => this.decreaseScore(index)} alt="" style={{ opacity: `${this.state.players[index].score === 0 ? 0.2 : 1}` }} />
       </div>
     ))
 
@@ -386,6 +403,7 @@ class App extends Component {
         <div className="menu">
           <div className="menu-title">Badminton Score Keeper</div>
           <div className="button-container">
+            <div className="button point-mode" onClick={() => this.toggleWinningPoint()} >{this.state.winningPoint}</div>
             {listenButton}
             {speakButton}
             <img className="button" alt="" src={undo} onClick={() => this.undo()} />
