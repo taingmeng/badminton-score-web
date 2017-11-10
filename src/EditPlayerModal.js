@@ -46,25 +46,37 @@ class EditPlayerModal extends React.Component {
     })
   }
 
+  handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      this.addCommand()
+    }
+  }
+
   render() {
     return (
       <Modal
         style={customStyles}
         isOpen={this.props.isOpen}>
         <div className="edit-player-modal">
+
           <div>Player Name</div>
           <input value={this.state.name} style={{ marginBottom: '10px' }}
             onChange={e => this.setState({ name: e.target.value })} />
+
           <div>New Command</div>
           <div style={{
             display: 'flex',
             marginBottom: '10px',
             alignItems: 'center'
           }}>
-            <input value={this.state.newCommand} style={{ flex: 1 }}
+            <input
+              value={this.state.newCommand}
+              style={{ flex: 1 }}
+              onKeyPress={this.handleKeyPress}
               onChange={e => this.setState({ newCommand: e.target.value })} />
             <img src={plus} className="command-button" style={{ marginLeft: '10px' }} onClick={() => this.addCommand()} />
           </div>
+
           <div>Commands</div>
           <div className="commands-container">
             {this.state.commands.map((command, index) =>

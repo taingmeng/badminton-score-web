@@ -21,22 +21,20 @@ const intialState = {
   voiceInput: [],
   voiceEngine: '',
   voiceSupported: false,
-  speakOn: true,
-  speakSupported: Speech.browserSupport(),
-  listenOn: true,
-  gameMode: 'single',
-  leftFirst: true,
-  lastScorers: [],
+  listenOn: false,
+  speakOn: false,
+  speakSupported: false,
+  serverHistory: [],
   players: [
     {
       name: 'Player 1',
       score: 0,
-      commands: ['Player One', 'Victor']
+      commands: ['Player One']
     },
     {
       name: 'Player 2',
       score: 0,
-      commands: ['Player Two', 'Champion']
+      commands: ['Player Two']
     }
   ],
   isOpenHelp: false,
@@ -48,21 +46,24 @@ const intialState = {
 class App extends Component {
   constructor(params) {
     super(params)
-    this.state = this.getDataFromLocalStorage()
+    this.state = {
+      ...intialState,
+      ...this.getDataFromLocalStorage()
+    }
     this.speakCount = 0
     this.speakCountQueue = []
   }
 
   saveDataToLocalStorage() {
-    localStorage.setItem('badminton', JSON.stringify(this.state))
+    localStorage.setItem('badminton-score-keeper', JSON.stringify(this.state))
   }
 
   getDataFromLocalStorage() {
-    const fromLocalStorage = localStorage.getItem('badminton')
+    const fromLocalStorage = localStorage.getItem('badminton-score-keeper')
     if (fromLocalStorage) {
       return JSON.parse(fromLocalStorage)
     }
-    return intialState
+    return null
   }
 
   componentDidMount() {
@@ -71,12 +72,13 @@ class App extends Component {
     })
     if (annyang) {
       this.setState({
-        voiceSupported: true
+        voiceSupported: true,
+        listenOn: true
       })
       annyang.addCommands({
         'reset': () => this.reset(),
         'change': () => this.changeSide(),
-        'undo': () => this.undo()
+        'undo': () => this.undoScore()
       })
 
       annyang.addCallback('start', event => this.engine('on'))
@@ -96,6 +98,10 @@ class App extends Component {
         voiceEngine: 'Unsupported'
       })
     }
+
+    this.setState({
+      speakSupported: Speech.browserSupport()
+    })
   }
 
   componentWillUnmount() {
@@ -164,39 +170,30 @@ class App extends Component {
   }
 
   increaseScore(playerIndex) {
-    this.updateScore(playerIndex, 1)
-  }
-
-  decreaseScore(playerIndex) {
-    this.updateScore(playerIndex, -1)
-  }
-
-  updateScore(playerIndex, scoreOffset) {
+    if (this.getWinnerIndex() !== -1) {
+      return
+    }
     let players = this.state.players.slice()
-    if (players[playerIndex].score === 0 && scoreOffset < 0) {
-      return
-    }
-
-    if (this.getWinnerIndex() !== -1 && scoreOffset > 0) {
-      return
-    }
-
-    players[playerIndex].score += scoreOffset
+    players[playerIndex].score += 1
     this.setState({
-      players: players
+      players: players,
+      serverHistory: [...this.state.serverHistory, playerIndex]
+    }, () => {
+      this.saveDataToLocalStorage()
+      this.announceServingSide()
     })
+  }
 
-    if (scoreOffset > 0) {
+  undoScore() {
+    const serverHistory = this.state.serverHistory
+    if (serverHistory.length > 0) {
+      const lastServerIndex = serverHistory[serverHistory.length - 1]
+      const players = this.state.players.slice()
+      players[lastServerIndex].score -= 1
       this.setState({
-        lastScorers: [...this.state.lastScorers, playerIndex]
-      }, () => {
-        this.announceServingSide()
-        this.saveDataToLocalStorage()
+        players: players,
+        serverHistory: serverHistory.slice(0, -1)
       })
-    } else if (scoreOffset < 0) {
-      this.setState({
-        lastScorers: this.state.lastScorers.slice(0, -1)
-      }, () => this.saveDataToLocalStorage())
     }
   }
 
@@ -212,26 +209,17 @@ class App extends Component {
     }
   }
 
-  undo() {
-    const lastScorers = this.state.lastScorers
-    if (lastScorers.length > 0) {
-      const lastScorer = lastScorers[lastScorers.length - 1]
-      this.decreaseScore(lastScorer)
-    }
-  }
-
   reset() {
     let players = this.state.players.slice()
     players.forEach(player => player.score = 0)
     this.setState({
       players: players,
-      lastScorer: 0
+      serverHistory: []
     }, () => this.saveDataToLocalStorage())
   }
 
   changeSide() {
     this.setState({
-      leftFirst: !this.state.leftFirst,
       players: this.state.players.reverse()
     }, () => this.saveDataToLocalStorage())
   }
@@ -308,10 +296,11 @@ class App extends Component {
   }
 
   getLastScorerIndex() {
-    if (this.state.lastScorers.length === 0) {
+    const serverHistory = this.state.serverHistory
+    if (serverHistory.length === 0) {
       return 0
     }
-    return this.state.lastScorers[this.state.lastScorers.length - 1]
+    return serverHistory[serverHistory.length - 1]
   }
 
   getScoresOrderByLastScorer() {
@@ -368,7 +357,7 @@ class App extends Component {
       <div className="score-container" key={index}>
         <img src={plus} className="score-control" onClick={() => this.increaseScore(index)} alt="" style={{ opacity: `${this.getWinnerIndex() !== -1 ? 0.2 : 1}` }} />
         <div className="score">{player.score}</div>
-        <img src={minus} className="score-control" onClick={() => this.decreaseScore(index)} alt="" style={{ opacity: `${this.state.players[index].score === 0 ? 0.2 : 1}` }} />
+        <img src={minus} className="score-control" onClick={() => this.undoScore(index)} alt="" style={{ opacity: `${this.state.players[index].score === 0 ? 0.2 : 1}` }} />
       </div>
     ))
 
@@ -406,7 +395,7 @@ class App extends Component {
             <div className="button point-mode" onClick={() => this.toggleWinningPoint()} >{this.state.winningPoint}</div>
             {listenButton}
             {speakButton}
-            <img className="button" alt="" src={undo} onClick={() => this.undo()} />
+            <img className="button" alt="" title="Undo" src={undo} onClick={() => this.undoScore()} />
             <img className="button" alt="" src={change} onClick={() => this.changeSide()} />
             <img className="button" alt="" src={reset} onClick={() => this.reset()} />
             <img className="button" alt="" src={help} onClick={() => this.help()} />
@@ -415,8 +404,8 @@ class App extends Component {
         <div className="container">
           <div className="row">
             <div className="col">
-              <div className="box" onClick={() => { if (leftPositions[0]) this.openEditPlayerModal(0) }}>{leftPositions[0]}</div>
-              <div className="box" onClick={() => { if (rightPositions[0]) this.openEditPlayerModal(0) }}>{rightPositions[0]}</div>
+              <div id="leftBox" className="box" onClick={() => { if (leftPositions[0]) this.openEditPlayerModal(0) }}>{leftPositions[0]}</div>
+              <div id="rightBox" className="box" onClick={() => { if (rightPositions[0]) this.openEditPlayerModal(0) }}>{rightPositions[0]}</div>
             </div>
             <div className="row">
               {scores}
