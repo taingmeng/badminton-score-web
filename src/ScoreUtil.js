@@ -72,7 +72,7 @@ const numberMap = {
 }
 
 export function getNumber(word) {
-  const number = numberMap[word]
+  const number = numberMap[word.toLowerCase()]
   if (number === null || number === undefined) {
     return -1
   }

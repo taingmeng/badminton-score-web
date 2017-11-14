@@ -1,20 +1,18 @@
 import React, { Component } from 'react'
-import annyang from 'annyang'
 import Speech from 'speak-tts'
 
 import EditPlayerModal from './EditPlayerModal'
 import HelpModal from './HelpModal'
-import { getNumber } from './ScoreHelper'
+import { getNumber } from './ScoreUtil'
 import undo from './svg/undo-button.svg'
 import help from './svg/help-button.svg'
 import reset from './svg/reset-button.svg'
 import change from './svg/change-button.svg'
-import plus from './svg/plus-button.svg'
-import minus from './svg/minus-button.svg'
 import listenOn from './svg/listen-on.svg'
 import listenOff from './svg/listen-off.svg'
 import speakOn from './svg/speak-on.svg'
 import speakOff from './svg/speak-off.svg'
+import annyang from './Annyang'
 import './App.css'
 
 const intialState = {
@@ -68,58 +66,29 @@ class App extends Component {
 
   componentDidMount() {
     Speech.init({
-      lang: 'en-GB'
+      onVoicesLoaded: (data) => { console.log('voices', data.voices) },
+      lang: 'en-AU'
     })
-    if (annyang) {
-      this.setState({
-        voiceSupported: true,
-        listenOn: true
-      })
-      annyang.addCommands({
-        'reset': () => this.reset(),
-        'change': () => this.changeSide(),
-        'undo': () => this.undoScore()
-      })
 
-      annyang.addCallback('start', event => this.engine('on'))
-      annyang.addCallback('soundstart', event => this.engine('listening'))
-      annyang.addCallback('end', event => this.engine('off'))
-      annyang.addCallback('error', event => this.engine(event.error))
-      annyang.addCallback('errorNetwork', event => this.engine('network error'))
-      annyang.addCallback('errorPermissionBlocked', event => this.engine('permission blocked'))
-      annyang.addCallback('errorPermissionDenied', event => this.engine('permission denied'))
-      annyang.addCallback('result', event => this.resultCallback(event))
-      if (this.state.listenOn) {
-        annyang.start({ autoRestart: true, continuous: false })
-      }
-    } else {
-      this.setState({
-        voiceSupported: false,
-        voiceEngine: 'Unsupported'
-      })
+    annyang.addCommands(this.reset, this.change, this.undo)
+    annyang.addCallback(this.engineCallback, this.resultCallback)
+    if (this.state.listenOn) {
+      annyang.start()
     }
 
     this.setState({
+      voiceSupported: annyang.isSupported(),
+      voiceEngine: annyang.isSupported() ? 'Supported' : 'Unsupported',
       speakSupported: Speech.browserSupport()
     })
   }
 
   componentWillUnmount() {
-    if (annyang) {
-      annyang.removeCallback('start')
-      annyang.removeCallback('soundstart')
-      annyang.removeCallback('end')
-      annyang.removeCallback('error')
-      annyang.removeCallback('errorNetwork')
-      annyang.removeCallback('errorPermissionBlocked')
-      annyang.removeCallback('errorPermissionDenied')
-      annyang.removeCallback('result')
-      annyang.abort()
-    }
+    annyang.abort()
   }
 
   toggleListen() {
-    if (annyang) {
+    if (this.state.voiceSupported) {
       if (this.state.listenOn) {
         annyang.abort()
       } else {
@@ -129,15 +98,9 @@ class App extends Component {
     }
   }
 
-  engine = (event) => {
+  engineCallback = (status) => {
     this.setState({
-      voiceEngine: event
-    })
-  }
-
-  errorCallback = (event) => {
-    this.setState({
-      voiceInput: []
+      voiceEngine: status
     })
   }
 
@@ -153,7 +116,7 @@ class App extends Component {
         }
         return false
       })
-      const scores = phrase.trim().toLowerCase().split(/[\s,:0]/)
+      const scores = phrase.trim().split(/[\s,:0]/)
       if (scores && scores.length === 2) {
         const score0 = getNumber(scores[0])
         const score1 = getNumber(scores[1])
@@ -167,6 +130,18 @@ class App extends Component {
       }
       return false
     })
+  }
+
+  handleScoresFromVoiceRecognition(scores) {
+    const newScorerIndex = this.getNewScorerIndex(scores)
+    if (newScorerIndex === -1) {
+      this.setState({
+        voiceEngine: 'Invalid score update'
+      })
+      this.speak('Invalid score update for ' + scores)
+    } else {
+      this.increaseScore(newScorerIndex)
+    }
   }
 
   increaseScore(playerIndex) {
@@ -184,32 +159,24 @@ class App extends Component {
     })
   }
 
-  undoScore() {
+  undo = () => {
     const serverHistory = this.state.serverHistory
-    if (serverHistory.length > 0) {
-      const lastServerIndex = serverHistory[serverHistory.length - 1]
-      const players = this.state.players.slice()
-      players[lastServerIndex].score -= 1
-      this.setState({
-        players: players,
-        serverHistory: serverHistory.slice(0, -1)
-      })
+    if (serverHistory.length == 0) {
+      return
     }
+    const lastServerIndex = serverHistory[serverHistory.length - 1]
+    const players = this.state.players.slice()
+    players[lastServerIndex].score -= 1
+    this.setState({
+      players: players,
+      serverHistory: serverHistory.slice(0, -1)
+    }, () => {
+      this.saveDataToLocalStorage()
+      this.announceServingSide()
+    })
   }
 
-  handleScoresFromVoiceRecognition(scores) {
-    const newScorerIndex = this.getNewScorerIndex(scores)
-    if (newScorerIndex === -1) {
-      this.setState({
-        voiceEngine: 'Invalid score update'
-      })
-      this.speak('Invalid score update for ' + scores)
-    } else {
-      this.increaseScore(newScorerIndex)
-    }
-  }
-
-  reset() {
+  reset = () => {
     let players = this.state.players.slice()
     players.forEach(player => player.score = 0)
     this.setState({
@@ -218,7 +185,7 @@ class App extends Component {
     }, () => this.saveDataToLocalStorage())
   }
 
-  changeSide() {
+  change = () => {
     this.setState({
       players: this.state.players.reverse()
     }, () => this.saveDataToLocalStorage())
@@ -288,11 +255,27 @@ class App extends Component {
 
   getNewScorerIndex(newScores) {
     const currentScores = this.state.players.map(player => player.score)
-    let newScorerIndex = newScores.findIndex((newScore, index) => newScore - currentScores[index] == 1)
-    if (newScorerIndex === -1) {
-      newScorerIndex = newScores.reverse().findIndex((newScore, index) => newScore - currentScores[index] == 1)
+    // const sumCurrentScores = currentScores.reduce((sum, score) => sum + score)
+    // const sumNewScores = currentScores.reduce((sum, score) => sum + score)
+    if (currentScores[0] === currentScores[1]) {
+      if (newScores[0] - currentScores[0] === 1 && newScores[1] === currentScores[1]) {
+        return 0
+      } else if (newScores[1] - currentScores[1] === 1 && newScores[0] === currentScores[0]) {
+        return 1
+      } else {
+        return -1
+      }
+    } else {
+      if ((newScores[0] - currentScores[0] === 1 && newScores[1] === currentScores[1]) ||
+        (newScores[1] - currentScores[0] === 1 && newScores[0] === currentScores[1])) {
+        return 0
+      } else if ((newScores[1] - currentScores[1] === 1 && newScores[0] === currentScores[0]) ||
+        (newScores[0] - currentScores[1] === 1 && newScores[1] === currentScores[0])) {
+        return 1
+      } else {
+        return -1
+      }
     }
-    return newScorerIndex
   }
 
   getLastScorerIndex() {
@@ -313,6 +296,9 @@ class App extends Component {
   }
 
   openEditPlayerModal(playerIndex) {
+    if (annyang) {
+      annyang.abort()
+    }
     this.setState({
       isOpenEditPlayer: true,
       activePlayerIndex: playerIndex
@@ -320,6 +306,9 @@ class App extends Component {
   }
 
   closeEditPlayerModal() {
+    if (annyang) {
+      annyang.resume()
+    }
     this.setState({
       isOpenEditPlayer: false,
       activePlayerIndex: -1
@@ -336,13 +325,13 @@ class App extends Component {
     this.closeEditPlayerModal()
   }
 
-  help() {
+  help = () => {
     this.setState({
       isOpenHelp: true
     })
   }
 
-  toggleWinningPoint() {
+  toggleWinningPoint = () => {
     this.setState({
       winningPoint: this.state.winningPoint === 11 ? 21 : 11
     })
@@ -354,17 +343,17 @@ class App extends Component {
     const rightPositions = leftPositions.length === 0 ? playerNames : []
 
     const scores = this.state.players.map((player, index) => (
-      <div className="score-container" key={index}>
-        <img src={plus} className="score-control" onClick={() => this.increaseScore(index)} alt="" style={{ opacity: `${this.getWinnerIndex() !== -1 ? 0.2 : 1}` }} />
-        <div className="score">{player.score}</div>
-        <img src={minus} className="score-control" onClick={() => this.undoScore(index)} alt="" style={{ opacity: `${this.state.players[index].score === 0 ? 0.2 : 1}` }} />
-      </div>
+      <div
+        key={index}
+        className="score"
+        onClick={() => this.increaseScore(index)}>{player.score}</div>
     ))
 
     const listenButton = this.state.voiceSupported ?
       <img
         className="button"
         alt=""
+        title={this.state.listenOn ? 'Disable voice recognition' : 'Enable voice recognition'}
         src={this.state.listenOn ? listenOn : listenOff}
         onClick={() => this.toggleListen()} /> : null
 
@@ -392,13 +381,13 @@ class App extends Component {
         <div className="menu">
           <div className="menu-title">Badminton Score Keeper</div>
           <div className="button-container">
-            <div className="button point-mode" onClick={() => this.toggleWinningPoint()} >{this.state.winningPoint}</div>
+            <div className="button point-mode" title="Winning Point" onClick={this.toggleWinningPoint} >{this.state.winningPoint}</div>
             {listenButton}
             {speakButton}
-            <img className="button" alt="" title="Undo" src={undo} onClick={() => this.undoScore()} />
-            <img className="button" alt="" src={change} onClick={() => this.changeSide()} />
-            <img className="button" alt="" src={reset} onClick={() => this.reset()} />
-            <img className="button" alt="" src={help} onClick={() => this.help()} />
+            <img className="button" alt="" title="Undo" src={undo} onClick={this.undo} style={{ opacity: this.state.serverHistory.length === 0 ? 0.2 : 1 }} />
+            <img className="button" alt="" title="Change" src={change} onClick={this.change} />
+            <img className="button" alt="" title="Reset" src={reset} onClick={this.reset} />
+            <img className="button" alt="" title="Help" src={help} onClick={this.help} />
           </div>
         </div>
         <div className="container">
@@ -425,7 +414,6 @@ class App extends Component {
                 {this.state.voiceInput.map((input, index) => <li key={index}>{input}</li>)}
               </div> : null
             }
-
           </div>
         </div>
       </div>
